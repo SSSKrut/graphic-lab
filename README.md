@@ -40,4 +40,4 @@ make -j$(nproc)
 - Save to PPM — сохранение результата в файл PPM
 
 ### Результат
-![Рендер коробки Корнелла](github.com/SSSKrut/graphic-lab/blob/main/output/render.ppm)
+![Рендер коробки Корнелла](https://github.com/SSSKrut/graphic-lab/main/output/render.ppm)
