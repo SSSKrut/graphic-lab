@@ -38,3 +38,6 @@ make -j$(nproc)
 
 ### Экспорт
 - Save to PPM — сохранение результата в файл PPM
+
+### Результат
+![Рендер коробки Корнелла](github.com/SSSKrut/graphic-lab/blob/main/output/render.ppm)
