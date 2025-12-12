@@ -9,6 +9,7 @@ find_package(glfw3 REQUIRED)
 find_package(glm REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(embree 4 REQUIRED)
+find_package(OpenMP REQUIRED)
 
 include(FetchContent)
 
@@ -32,7 +33,7 @@ target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR} 
     ${imgui_SOURCE_DIR}/backends
 )
-target_link_libraries(imgui PUBLIC glfw OpenGL::GL)
+target_link_libraries(imgui PUBLIC glfw OpenGL::GL OpenMP::OpenMP_CXX)
 
 add_executable(pathtracer
     src/main.cpp
@@ -50,6 +51,7 @@ target_link_libraries(pathtracer PRIVATE
     OpenGL::GL
     embree
     imgui
+    OpenMP::OpenMP_CXX
 )
 
 target_compile_options(pathtracer PRIVATE -O3 -march=native)

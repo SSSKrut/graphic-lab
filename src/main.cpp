@@ -16,6 +16,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #include "stb_image_write.h"
 #include "tiny_obj_loader.h"
 
@@ -209,9 +213,13 @@ public:
     rayhit.ray.dir_z = ray.direction.z;
     rayhit.ray.tnear = 0.001f;
     rayhit.ray.tfar = 1e30f;
-    rayhit.ray.mask = -1;
+    rayhit.ray.mask = (unsigned)-1;
     rayhit.ray.flags = 0;
+    rayhit.ray.time = 0.0f;
+    rayhit.ray.id = 0;
     rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+    rayhit.hit.primID = RTC_INVALID_GEOMETRY_ID;
+    rayhit.hit.instID[0] = RTC_INVALID_GEOMETRY_ID;
 
     rtcIntersect1(rtcScene, &rayhit);
 
@@ -296,6 +304,7 @@ public:
       }
 
       for (int s = 0; s < spp && !stopRequested; s++) {
+
 #pragma omp parallel for schedule(dynamic, 16)
         for (int y = 0; y < height; y++) {
           if (stopRequested)
@@ -308,13 +317,18 @@ public:
           std::mt19937 &rng = rngs[tid % rngs.size()];
           std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
+          std::vector<glm::vec3> rowBuffer(width);
           for (int x = 0; x < width; x++) {
             Ray ray = generateRay(x, y, dist(rng), dist(rng));
-            glm::vec3 color = trace(ray, rng, 0);
+            rowBuffer[x] = trace(ray, rng, 0);
+          }
 
-            int idx = y * width + x;
-            std::lock_guard<std::mutex> lock(bufferMutex);
-            accumBuffer[idx] += color;
+#pragma omp critical
+          {
+            for (int x = 0; x < width; x++) {
+              int idx = y * width + x;
+              accumBuffer[idx] += rowBuffer[x];
+            }
           }
         }
         currentSample++;
@@ -456,14 +470,17 @@ public:
     int samples = std::max(1, currentSample.load());
 
     float maxLum = 0.0f;
+#pragma omp parallel for reduction(max : maxLum)
     for (int i = 0; i < width * height; i++) {
       glm::vec3 c = accumBuffer[i] / (float)samples;
-      maxLum = std::max(maxLum, 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b);
+      float lum = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+      maxLum = std::max(maxLum, lum);
     }
 
     float scale = maxLum > 0.0f ? 1.0f / maxLum : 1.0f;
     scale = std::min(scale, 2.0f);
 
+#pragma omp parallel for
     for (int i = 0; i < width * height; i++) {
       glm::vec3 c = accumBuffer[i] / (float)samples * scale;
       c = glm::clamp(c, 0.0f, 1.0f);
@@ -520,7 +537,10 @@ int main() {
   ImGui_ImplOpenGL3_Init("#version 330");
 
   PathTracer pt;
-  pt.loadScene("assets/cornell-box.obj");
+  if (!pt.loadScene("../assets/cornell-box.obj")) {
+    fprintf(stderr, "Failed to load scene!\\n");
+    return -1;
+  }
 
   float camPos[3] = {0.0f, 2.5f, 10.0f};
   float lookAt[3] = {0.0f, 2.5f, -3.0f};
